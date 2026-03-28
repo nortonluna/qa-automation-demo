@@ -1,0 +1,71 @@
+# .github/workflows/tests.yml
+#
+# Este archivo define una pipeline básica de GitHub Actions.
+# Su función es ejecutar nuestras pruebas automatizadas cada vez que
+# subimos cambios al repositorio o abrimos un pull request hacia main.
+
+# "name" es el nombre visible de la pipeline dentro de la pestaña Actions en GitHub.
+# Es el texto que veremos cuando la ejecución aparezca en el historial.
+name: QA Tests
+
+# "on" define cuándo se debe disparar la pipeline.
+# En este caso correrá automáticamente en dos escenarios:
+# 1. Cuando se haga push a la rama main
+# 2. Cuando se cree o actualice un pull request hacia main
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+# "jobs" agrupa los trabajos que la pipeline va a ejecutar.
+# Aquí solo tenemos un job llamado "test".
+jobs:
+  test:
+    # "runs-on" indica el tipo de máquina temporal que GitHub usará.
+    # "ubuntu-latest" significa que la ejecución ocurrirá en un servidor Linux Ubuntu.
+    runs-on: ubuntu-latest
+
+    # "steps" contiene la lista de pasos que se ejecutarán en orden.
+    # Cada paso prepara el ambiente o corre una parte de nuestras pruebas.
+    steps:
+      # Paso 1: descargar el código del repositorio dentro de la máquina de GitHub.
+      # Sin este paso, la pipeline no tendría acceso a nuestros archivos.
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Paso 2: instalar y preparar Python dentro de la máquina temporal.
+      # Esto es necesario porque nuestras pruebas están escritas en Python.
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # Paso 3: instalar las dependencias del proyecto desde requirements.txt.
+      # Aquí se instalan librerías como pytest, selenium y requests.
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      # Paso 4: instalar Google Chrome.
+      # Esto es necesario porque las pruebas de UI usan Selenium para controlar un navegador real.
+      - name: Install Google Chrome
+        run: |
+          wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
+          echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" | sudo tee /etc/apt/sources.list.d/google-chrome.list
+          sudo apt-get update -qq
+          sudo apt-get install -y google-chrome-stable
+
+      # Nota importante:
+      # No instalamos ChromeDriver manualmente porque Selenium moderno
+      # puede resolverlo automáticamente con Selenium Manager.
+
+      # Paso 5: correr primero las pruebas de API.
+      # Las ejecutamos antes porque son más rápidas y no dependen del navegador.
+      - name: Run API tests
+        run: pytest tests/api -v
+
+      # Paso 6: correr las pruebas de UI.
+      # Estas pruebas validan flujos visuales en el navegador usando Selenium.
+      # En CI normalmente el navegador se ejecuta sin interfaz visible.
+      - name: Run UI tests
+        run: pytest tests/ui -v
